@@ -1,12 +1,15 @@
 """答题引擎 — 出题、判题、调度"""
 
 import json
+import logging
 import random
 from dataclasses import dataclass
 from typing import Optional, Callable, Awaitable
 
 import config
 from .timer import CountdownTimer
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -40,9 +43,17 @@ class QuizEngine:
         self._on_state: Optional[Callable[[QuizState], Awaitable[None]]] = None
 
     def load_questions(self, path: str = "data/questions.json"):
-        """从 JSON 加载题库"""
+        """从 JSON 加载题库
+        
+        Raises:
+            FileNotFoundError: 题库文件不存在
+            json.JSONDecodeError: JSON 格式错误
+            ValueError: 题目数据字段不完整
+        """
         with open(path, "r", encoding="utf-8") as f:
             raw = json.load(f)
+        if not isinstance(raw, list) or not raw:
+            raise ValueError("题库为空或格式错误")
         self.questions = [Question(**q) for q in raw]
         random.shuffle(self.questions)
 
@@ -51,13 +62,18 @@ class QuizEngine:
         self._on_state = handler
 
     async def _emit(self, **kwargs):
+        """推送状态变化到注册的回调"""
         if self._on_state:
-            await self._on_state(QuizState(
-                question=self.questions[self._current_index - 1] if 0 < self._current_index <= len(self.questions) else None,
-                total_questions=len(self.questions),
-                current_index=self._current_index,
-                **kwargs,
-            ))
+            try:
+                await self._on_state(QuizState(
+                    question=self.questions[self._current_index - 1]
+                        if 0 < self._current_index <= len(self.questions) else None,
+                    total_questions=len(self.questions),
+                    current_index=self._current_index,
+                    **kwargs,
+                ))
+            except Exception:
+                logger.exception("状态回调异常")
 
     async def run(self):
         """运行完整答题流程"""

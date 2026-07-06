@@ -8,8 +8,8 @@
     {
         "id": 2,
         "question": "1 + 1 = ?",
-        "options": ["1", "2", "3"],
-        "answer": "2"
+        "options": ["A. 1", "B. 2", "C. 3"],
+        "answer": "B"
     },
     {
         "id": 3,

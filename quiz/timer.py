@@ -6,14 +6,12 @@ from typing import Callable, Optional
 
 
 class CountdownTimer:
-    """可暂停/恢复的倒计时器"""
+    """异步倒计时器，支持提前终止"""
 
     def __init__(self, seconds: int, on_tick: Optional[Callable[[int], None]] = None):
         self.total = seconds
         self.remaining = seconds
         self._running = False
-        self._paused = False
-        self._task: Optional[asyncio.Task] = None
         self.on_tick = on_tick  # 每秒回调 remaining→int
 
     @property
@@ -21,9 +19,12 @@ class CountdownTimer:
         return self._running
 
     async def start(self) -> int:
-        """启动倒计时，阻塞直到结束，返回剩余秒数(0=正常结束)"""
+        """启动倒计时，阻塞直到结束或 stop() 被调用
+        
+        Returns:
+            int: 剩余秒数（0=正常结束，>0=被提前终止）
+        """
         self._running = True
-        self._paused = False
         self.remaining = self.total
 
         while self.remaining > 0 and self._running:
@@ -35,13 +36,13 @@ class CountdownTimer:
             await asyncio.sleep(1)
             elapsed = time.monotonic() - tick_start
             self.remaining -= 1
-            # 补偿睡眠偏差（最多累加1秒）
+            # 补偿睡眠偏差：若实际睡眠 > 1.1s，多扣相应秒数
             if elapsed > 1.1:
                 self.remaining -= int(elapsed - 1)
 
         self._running = False
-        return self.remaining
+        return max(self.remaining, 0)
 
     def stop(self):
-        """提前终止倒计时"""
+        """提前终止倒计时（协程安全：仅设置标志位）"""
         self._running = False

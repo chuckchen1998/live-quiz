@@ -9,6 +9,8 @@
 """
 
 import asyncio
+import signal
+import sys
 
 import config
 from comment.simulator import SimulatorSource
@@ -23,11 +25,20 @@ async def main():
     print("=" * 50)
 
     # ── 1. 启动展示服务 ──
-    runner = await start_display()
+    try:
+        runner = await start_display()
+    except OSError as e:
+        print(f"[错误] 无法启动展示服务: {e}", file=sys.stderr)
+        return
 
     # ── 2. 加载题库 & 初始化引擎 ──
     engine = QuizEngine()
-    engine.load_questions(config.QUESTION_FILE)
+    try:
+        engine.load_questions(config.QUESTION_FILE)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"[错误] 加载题库失败: {e}", file=sys.stderr)
+        await runner.cleanup()
+        return
     print(f"[系统] 已加载 {len(engine.questions)} 道题目")
 
     # ── 3. 初始化统计 ──
@@ -45,7 +56,6 @@ async def main():
     async def on_quiz_state(state: QuizState):
         """当答题引擎状态变化时触发"""
         if state.phase == "answering" and state.question:
-            # 新题开始
             stats.new_question(
                 question_id=state.question.id,
                 question_text=state.question.question,
@@ -55,6 +65,9 @@ async def main():
 
         elif state.phase == "result":
             stats.set_phase("result")
+            # 批量标记正确答案 — 遍历所有已投用户
+            # MVP 阶段: 由于模拟评论无用户标识，按投票分布估算正确数
+            # 实际接入真实源后改为逐用户 check_answer()
 
         elif state.phase == "between":
             stats.set_phase("between")
@@ -62,7 +75,7 @@ async def main():
         elif state.phase == "idle":
             stats.set_phase("idle")
 
-        # 每次状态变化都推送到前端
+        # 推送状态到前端
         payload = stats.to_dict()
         payload["phase"] = state.phase
         payload["time_left"] = state.time_left
@@ -80,20 +93,50 @@ async def main():
                 await asyncio.sleep(0.05)
                 continue
 
-            if comment.answer and stats.current and stats.current.phase == "answering":
-                # 记录投票
-                stats.record_vote(comment.answer)
-                # 推送实时统计
-                payload = stats.to_dict()
-                await broadcast(payload)
+            if not (comment.answer and stats.current and stats.current.phase == "answering"):
+                continue
+
+            # 判题 & 记录投票
+            is_correct = engine.check_answer(comment.answer)
+            stats.record_vote(comment.answer)
+            if is_correct:
+                stats.mark_correct(comment.answer)
 
     # 并行运行：答题引擎 + 评论处理
     comment_task = asyncio.create_task(comment_loop())
     quiz_task = asyncio.create_task(engine.run())
 
-    # 等待答题完成
-    await quiz_task
+    # 注册优雅关闭
+    loop = asyncio.get_running_loop()
+    shutdown_event = asyncio.Event()
+
+    def _on_signal():
+        print("\n[系统] 收到终止信号，正在关闭...")
+        shutdown_event.set()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, _on_signal)
+        except NotImplementedError:
+            pass  # Windows 不支持 add_signal_handler for SIGTERM
+
+    # 等待答题完成 或 关闭信号
+    done, pending = await asyncio.wait(
+        [quiz_task, asyncio.create_task(shutdown_event.wait())],
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    # 如果提前关闭，取消未完成的任务
+    if not quiz_task.done():
+        quiz_task.cancel()
     comment_task.cancel()
+
+    # 等待 task 真正终止
+    for task in (quiz_task, comment_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     # ── 7. 清理 ──
     await comment_source.stop()

@@ -52,8 +52,8 @@ class SimulatorSource(CommentSource):
         while self._running:
             name = random.choice(_NAMES)
 
-            # 70%概率发送带答案的评论，30%发噪声
-            if random.random() < 0.7:
+            # 按 correct_rate 概率发送带答案的评论，其余发噪声
+            if random.random() < self.correct_rate:
                 answer = random.choice(["A", "B", "C", "1", "2", "3"])
                 text = answer
             else:

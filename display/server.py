@@ -1,15 +1,16 @@
 """展示模块 — WebSocket + HTTP 服务，供OBS浏览器源使用"""
 
-import asyncio
 import json
+import logging
 import os
-import weakref
 
 import aiohttp.web
 import config
 
+logger = logging.getLogger(__name__)
+
 # 存储所有连接的 WebSocket 客户端
-_WS_CLIENTS: weakref.WeakSet = weakref.WeakSet()
+_WS_CLIENTS: set[aiohttp.web.WebSocketResponse] = set()
 
 
 async def broadcast(data: dict):
@@ -20,6 +21,7 @@ async def broadcast(data: dict):
         try:
             await ws.send_str(msg)
         except Exception:
+            logger.warning("WebSocket 发送失败，移除客户端", exc_info=True)
             dead.append(ws)
     for ws in dead:
         _WS_CLIENTS.discard(ws)
@@ -46,7 +48,11 @@ async def http_index(request):
 
 
 async def start_display():
-    """启动展示服务"""
+    """启动展示服务
+    
+    Returns:
+        AppRunner: 调用 runner.cleanup() 关闭服务
+    """
     app = aiohttp.web.Application()
     app.router.add_get("/", http_index)
     app.router.add_get("/ws", ws_handler)
