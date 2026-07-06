@@ -1,6 +1,6 @@
 {
   "total_questions": 5,
-  "completed_at": "2026-07-06 21:28:19",
+  "completed_at": "2026-07-06 21:38:58",
   "questions": [
     {
       "id": 3,
@@ -211,6 +211,214 @@
       "accuracy": 0.0
     },
     {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "id": 1,
+      "question": "Python中，以下哪个是可变数据类型？",
+      "correct_answer": "B",
+      "votes": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "total": 0,
+      "correct_count": 0,
+      "accuracy": 0.0
+    },
+    {
       "id": 2,
       "question": "1 + 1 = ?",
       "correct_answer": "B",
@@ -824,214 +1032,6 @@
     {
       "id": 4,
       "question": "list(map(str, [1,2,3])) 的结果是？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
-      "correct_answer": "B",
-      "votes": {
-        "A": 0,
-        "B": 0,
-        "C": 0
-      },
-      "total": 0,
-      "correct_count": 0,
-      "accuracy": 0.0
-    },
-    {
-      "id": 1,
-      "question": "Python中，以下哪个是可变数据类型？",
       "correct_answer": "B",
       "votes": {
         "A": 0,
