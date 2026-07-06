@@ -1,5 +1,6 @@
-"""答题引擎 — 出题、判题、调度"""
+"""答题引擎 — 出题、判题、调度、Admin 控制"""
 
+import asyncio
 import json
 import logging
 import random
@@ -18,7 +19,7 @@ class Question:
     id: int
     question: str
     options: list[str]
-    answer: str  # "A" / "B" / "C" / "1" / "2" / "3"
+    answer: str  # "A" / "B" / "C"
 
 
 @dataclass
@@ -26,25 +27,88 @@ class QuizState:
     """当前答题状态 — 推送给展示模块"""
     question: Optional[Question] = None
     time_left: int = 0
-    phase: str = "idle"         # idle | answering | result | between
+    phase: str = "idle"         # idle | countdown | answering | result | between | paused | finished
     total_questions: int = 0
     current_index: int = 0      # 当前第几题(1-based)
     message: str = ""
 
 
 class QuizEngine:
-    """答题核心引擎"""
+    """答题核心引擎 — 支持 Admin API 控制"""
 
     def __init__(self):
         self.questions: list[Question] = []
         self._timer: Optional[CountdownTimer] = None
         self._current_index = 0
-        self._current_phase = "idle"  # 当前阶段
+        self._current_phase = "idle"
         self._on_state: Optional[Callable[[QuizState], Awaitable[None]]] = None
+
+        # Admin 控制信号
+        self._pause_event = asyncio.Event()
+        self._pause_event.set()          # 初始未暂停
+        self._skip_current = False       # 跳过当前题
+        self._reveal_now = False         # 立即揭晓答案
+        self._next_event = asyncio.Event()  # 手动推进到下一题（设为自动模式则始终 set）
+
+    @property
+    def phase(self) -> str:
+        return self._current_phase
+
+    @property
+    def current_index(self) -> int:
+        return self._current_index
+
+    # ── Admin API ──
+
+    def pause(self):
+        """暂停答题"""
+        if self._current_phase in ("answering", "between", "result"):
+            self._pause_event.clear()
+            logger.info("Admin: 暂停")
+
+    def resume(self):
+        """恢复答题"""
+        self._pause_event.set()
+        logger.info("Admin: 恢复")
+
+    def skip(self):
+        """跳过当前题"""
+        self._skip_current = True
+        if self._timer and self._timer.running:
+            self._timer.stop()
+        logger.info("Admin: 跳过当前题")
+
+    def reveal(self):
+        """立即揭晓答案"""
+        self._reveal_now = True
+        if self._timer and self._timer.running:
+            self._timer.stop()
+        logger.info("Admin: 揭晓答案")
+
+    def next_question(self):
+        """手动推进到下一题（between 阶段跳过等待）"""
+        self._next_event.set()
+        if self._timer and self._timer.running:
+            self._timer.stop()
+
+    def to_api_state(self) -> dict:
+        """导出 Admin API 状态"""
+        q = self.questions[self._current_index - 1] \
+            if 0 < self._current_index <= len(self.questions) else None
+        return {
+            "phase": self._current_phase,
+            "current_index": self._current_index,
+            "total_questions": len(self.questions),
+            "question": q.question if q else None,
+            "options": q.options if q else [],
+            "answer": q.answer if q else None,
+        }
+
+    # ── 核心方法 ──
 
     def load_questions(self, path: str = "data/questions.json"):
         """从 JSON 加载题库
-        
+
         Raises:
             FileNotFoundError: 题库文件不存在
             json.JSONDecodeError: JSON 格式错误
@@ -76,40 +140,82 @@ class QuizEngine:
                 logger.exception("状态回调异常")
 
     async def run(self):
-        """运行完整答题流程"""
+        """运行完整答题流程（支持 Admin 控制）"""
         if not self.questions:
             await self._emit(phase="idle", message="题库为空")
             return
 
+        # 开场倒计时
+        self._current_phase = "countdown"
+        self._current_index = 0
+        for sec in (3, 2, 1):
+            await self._emit(phase="countdown", time_left=sec,
+                             message=f"答题即将开始... {sec}")
+            await asyncio.sleep(1)
+
         for i, q in enumerate(self.questions):
             self._current_index = i + 1
+            self._skip_current = False
+            self._reveal_now = False
 
             # ① 出题
             self._current_phase = "answering"
             await self._emit(phase="answering", time_left=config.QUESTION_TIME)
             await self._run_timer(config.QUESTION_TIME)
 
-            # ② 公布答案
-            self._current_phase = "result"
-            await self._emit(phase="result", time_left=0, message=f"正确答案: {q.answer}")
+            if self._skip_current:
+                logger.info(f"跳过第 {self._current_index} 题")
+                continue
 
-            # ③ 题间休息
+            # ② 公布答案 + 停留
+            self._current_phase = "result"
+            was_revealed = self._reveal_now
+            await self._emit(phase="result", time_left=config.RESULT_DISPLAY,
+                             message=f"正确答案: {q.answer}")
+            await self._run_timer(config.RESULT_DISPLAY)
+            self._reveal_now = False
+
+            # ③ 题间休息（最后一题跳过）
             if i < len(self.questions) - 1:
                 self._current_phase = "between"
-                await self._emit(phase="between", time_left=config.BETWEEN_QUESTIONS, message=f"下一题即将开始...")
-                await self._run_timer(config.BETWEEN_QUESTIONS)
+                self._next_event.clear()
+                await self._emit(phase="between", time_left=config.BETWEEN_QUESTIONS,
+                                 message="下一题即将开始...")
+                # 等待间隔结束或手动 next
+                try:
+                    await asyncio.wait_for(
+                        self._next_event.wait(),
+                        timeout=config.BETWEEN_QUESTIONS,
+                    )
+                except asyncio.TimeoutError:
+                    pass
 
-        self._current_phase = "idle"
-        await self._emit(phase="idle", message="答题结束！")
+        self._current_phase = "finished"
+        await self._emit(phase="finished", time_left=0, message="答题结束！")
 
     async def _run_timer(self, seconds: int):
+        """运行倒计时，支持暂停/跳过/揭晓中断"""
         self._timer = CountdownTimer(seconds, on_tick=self._on_tick)
         await self._timer.start()
+        # 等待暂停恢复
+        await self._pause_event.wait()
 
     async def _on_tick(self, remaining: int):
-        """每秒回调"""
+        """每秒回调 — 支持跳过/揭晓/暂停"""
+
+        # 检查 Admin 中断信号
+        if self._skip_current or self._reveal_now:
+            if self._timer:
+                self._timer.stop()
+            return
+
+        # 检查暂停
+        if not self._pause_event.is_set():
+            await self._pause_event.wait()
+
         if self._on_state:
-            q = self.questions[self._current_index - 1] if 0 < self._current_index <= len(self.questions) else None
+            q = self.questions[self._current_index - 1] \
+                if 0 < self._current_index <= len(self.questions) else None
             await self._on_state(QuizState(
                 question=q,
                 time_left=remaining,
@@ -123,14 +229,11 @@ class QuizEngine:
         if self._current_index < 1 or self._current_index > len(self.questions):
             return False
         q = self.questions[self._current_index - 1]
-        # 规范化：提取首字母/数字
         raw = user_answer.strip().upper()
-        # 尝试匹配 "A." "A" "1" 等格式
         ans = raw[0] if raw and raw[0] in "ABCD123" else ""
         if not ans:
             return False
         expected = q.answer.strip().upper()
-        # 直接匹配 或 数字↔字母互转 (1↔A, 2↔B, 3↔C)
         if ans.isdigit():
             ans = chr(ord("A") + int(ans) - 1)
         if expected.isdigit():

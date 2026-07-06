@@ -1,4 +1,4 @@
-"""实时统计模块 — 汇总每位用户的答题结果"""
+"""实时统计模块 — 汇总每位用户的答题结果（含去重）"""
 
 from dataclasses import dataclass, field
 from typing import Optional
@@ -6,7 +6,7 @@ from typing import Optional
 
 def _normalize_key(raw: str) -> str:
     """将用户答案归一化为选项字母 A/B/C/D
-    
+
     支持: "A", "A.", "1", "a", "B. 列表" 等格式
     """
     s = raw.strip().upper()
@@ -34,22 +34,23 @@ class QuestionStats:
 
 
 class StatsCollector:
-    """实时统计收集器"""
+    """实时统计收集器 — 每位用户每题限投 1 票"""
 
     def __init__(self):
         self.current: Optional[QuestionStats] = None
         self.history: list[QuestionStats] = []
+        # 去重：{user_id: {question_id: True}}
+        self._voters: dict[str, dict[int, bool]] = {}
 
     def new_question(self, question_id: int, question_text: str,
                      options: list[str], correct: str):
         """开始新题，重置统计
-        
+
         options 支持 "A. xxx" 或 "1" 两种格式，统一归一化为 A/B/C
         """
         if self.current:
             self.history.append(self.current)
 
-        # 统一将选项归一化为字母键
         option_keys = [_normalize_key(o) for o in options]
 
         self.current = QuestionStats(
@@ -61,26 +62,37 @@ class StatsCollector:
             phase="answering",
         )
 
-    def record_vote(self, user_answer: str):
-        """记录一票"""
-        self._apply_vote(user_answer, mark_correct=False)
+    def record_vote(self, user_id: str, user_answer: str) -> bool:
+        """记录一票。返回 True=有效投票，False=重复/无效"""
+        if not self.current:
+            return False
 
-    def mark_correct(self, user_answer: str):
-        """标记一条正确答案"""
-        self._apply_vote(user_answer, mark_correct=True)
+        # 去重检查
+        qid = self.current.question_id
+        if user_id in self._voters and qid in self._voters[user_id]:
+            return False  # 已投过
 
-    def _apply_vote(self, user_answer: str, *, mark_correct: bool):
-        """统一投票/标记处理"""
+        key = _normalize_key(user_answer)
+        if not key or key not in self.current.votes:
+            return False
+
+        # 记录投票
+        self.current.votes[key] += 1
+        self.current.total_votes += 1
+
+        # 标记已投
+        if user_id not in self._voters:
+            self._voters[user_id] = {}
+        self._voters[user_id][qid] = True
+
+        return True
+
+    def mark_correct(self, user_id: str, user_answer: str):
+        """标记一条正确答案（仅当该用户之前投过票时生效）"""
         if not self.current:
             return
         key = _normalize_key(user_answer)
-        if not key or key not in self.current.votes:
-            return
-
-        if not mark_correct:
-            self.current.votes[key] += 1
-            self.current.total_votes += 1
-        elif key == self.current.correct_answer:
+        if key == self.current.correct_answer:
             self.current.correct_count += 1
 
     def set_phase(self, phase: str):
