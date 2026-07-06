@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>直播答题 - OBS</title>
+<style>
+  :root {
+    --bg: rgba(15, 15, 30, 0.92);
+    --card: rgba(30, 30, 55, 0.85);
+    --text: #e0e0f0;
+    --accent: #6c5ce7;
+    --green: #00cec9;
+    --red: #ff6b6b;
+    --gold: #ffd93d;
+    --bar-a: #ff6b6b;
+    --bar-b: #6c5ce7;
+    --bar-c: #00cec9;
+    --bar-d: #ffd93d;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    background: transparent;
+    color: var(--text);
+    overflow: hidden;
+    width: 1920px; height: 1080px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end;
+    padding-bottom: 60px;
+  }
+  #container {
+    width: 800px;
+    background: var(--bg);
+    border-radius: 20px;
+    padding: 30px 40px;
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+  }
+  #phase-indicator {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 18px;
+  }
+  #phase-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--green); animation: pulse 1.5s infinite;
+  }
+  #phase-dot.result { background: var(--gold); animation: none; }
+  #phase-dot.between, #phase-dot.idle { background: #666; animation: none; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--green); }
+    50% { opacity: 0.4; box-shadow: 0 0 2px var(--green); }
+  }
+  #timer {
+    font-size: 36px; font-weight: bold; color: var(--gold);
+    margin-left: auto; font-variant-numeric: tabular-nums;
+  }
+  #timer.urgent { color: var(--red); animation: blink 0.5s infinite; }
+  @keyframes blink {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+  #question {
+    font-size: 26px; font-weight: bold; margin-bottom: 24px;
+    line-height: 1.4;
+  }
+  #options-row {
+    display: flex; gap: 16px; margin-bottom: 20px;
+  }
+  .option-btn {
+    flex: 1; padding: 10px 16px; border-radius: 12px;
+    text-align: center; font-size: 18px; font-weight: bold;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  }
+  /* 柱状图 */
+  #bars { display: flex; flex-direction: column; gap: 10px; }
+  .bar-row {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .bar-label {
+    width: 30px; text-align: center; font-weight: bold;
+    font-size: 22px;
+  }
+  .bar-track {
+    flex: 1; height: 38px; background: rgba(255,255,255,0.06);
+    border-radius: 19px; overflow: hidden; position: relative;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 19px; transition: width 0.3s ease;
+    display: flex; align-items: center; padding-left: 14px;
+    font-weight: bold; font-size: 16px; min-width: 50px;
+  }
+  .bar-fill.a { background: var(--bar-a); }
+  .bar-fill.b { background: var(--bar-b); }
+  .bar-fill.c { background: var(--bar-c); }
+  .bar-fill.d { background: var(--bar-d); }
+  .bar-count {
+    width: 50px; text-align: right; font-size: 20px;
+    font-weight: bold; font-variant-numeric: tabular-nums;
+  }
+  #result-banner {
+    text-align: center; font-size: 24px; font-weight: bold;
+    padding: 12px; margin-top: 12px; border-radius: 12px;
+    display: none;
+  }
+  #result-banner.correct { background: rgba(0, 206, 201, 0.2); color: var(--green); display: block; }
+  #result-banner.wrong { background: rgba(255, 107, 107, 0.2); color: var(--red); display: block; }
+  #message {
+    text-align: center; font-size: 20px; color: #888;
+    margin-top: 12px;
+  }
+  /* 统计 */
+  #total-label {
+    text-align: center; font-size: 14px; color: #666;
+    margin-top: 8px;
+  }
+  .correct { color: var(--green); }
+  .highlight { color: var(--gold); font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="container">
+  <div id="phase-indicator">
+    <span id="phase-text">等待开始...</span>
+    <span id="phase-dot"></span>
+    <span id="timer">--</span>
+  </div>
+  <div id="question">直播答题系统就绪</div>
+  <div id="options-row"></div>
+  <div id="bars"></div>
+  <div id="total-label"></div>
+  <div id="result-banner"></div>
+  <div id="message"></div>
+</div>
+
+<script>
+const BAR_COLORS = ['a','b','c','d'];
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    update(data);
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+  ws.onerror = () => ws.close();
+}
+connect();
+
+function update(d) {
+  const phase = d.phase || 'idle';
+  const options = d.options || [];
+  const votes = d.votes || {};
+  const total = d.total || 0;
+  const correct = d.correct_answer || '';
+  const qText = d.question_text || '';
+  const qId = d.question_id || '';
+  const correctCount = d.correct_count || 0;
+
+  // Phase
+  const dot = document.getElementById('phase-dot');
+  dot.className = phase;
+  const phaseText = document.getElementById('phase-text');
+  const labels = { idle:'等待中', answering:'答题中', result:'公布答案', between:'下一题准备' };
+  phaseText.textContent = labels[phase] || phase;
+
+  // Timer
+  const timerEl = document.getElementById('timer');
+  if (d.time_left !== undefined && d.time_left > 0) {
+    timerEl.textContent = d.time_left + 's';
+    timerEl.className = (phase==='answering' && d.time_left <= 5) ? 'urgent' : '';
+  } else {
+    timerEl.textContent = '--';
+    timerEl.className = '';
+  }
+
+  // Question
+  const qEl = document.getElementById('question');
+  qEl.textContent = qText ? `Q${qId}: ${qText}` : '直播答题系统就绪';
+
+  // Options buttons row
+  const optRow = document.getElementById('options-row');
+  if (phase === 'answering' && options.length) {
+    optRow.innerHTML = options.map((o, i) => {
+      const letter = String.fromCharCode(65 + i);
+      return `<div class="option-btn">${letter}</div>`;
+    }).join('');
+    optRow.style.display = 'flex';
+  } else {
+    optRow.style.display = 'none';
+  }
+
+  // Bars
+  const barsEl = document.getElementById('bars');
+  if (options.length && total > 0) {
+    const maxVote = Math.max(1, ...Object.values(votes));
+    barsEl.innerHTML = options.map((o, i) => {
+      const letter = String.fromCharCode(65 + i);
+      const count = votes[letter] || 0;
+      const pct = maxVote > 0 ? (count / maxVote * 100) : 0;
+      const isCorrect = phase === 'result' && letter === correct;
+      return `
+        <div class="bar-row">
+          <span class="bar-label ${isCorrect ? 'correct' : ''}">${letter}</span>
+          <div class="bar-track">
+            <div class="bar-fill ${BAR_COLORS[i]}" style="width:${Math.max(pct, 2)}%">
+              ${isCorrect ? '✓' : ''}
+            </div>
+          </div>
+          <span class="bar-count ${isCorrect ? 'correct' : ''}">${count}</span>
+        </div>`;
+    }).join('');
+    barsEl.style.display = 'flex';
+  } else if (options.length) {
+    barsEl.innerHTML = options.map((o, i) => {
+      const letter = String.fromCharCode(65 + i);
+      return `
+        <div class="bar-row">
+          <span class="bar-label">${letter}</span>
+          <div class="bar-track"><div class="bar-fill ${BAR_COLORS[i]}" style="width:2%"></div></div>
+          <span class="bar-count">0</span>
+        </div>`;
+    }).join('');
+    barsEl.style.display = 'flex';
+  } else {
+    barsEl.style.display = 'none';
+  }
+
+  // Total
+  const totalEl = document.getElementById('total-label');
+  totalEl.innerHTML = total > 0
+    ? `共 <span class="highlight">${total}</span> 人参与`
+    : '';
+
+  // Result banner
+  const banner = document.getElementById('result-banner');
+  if (phase === 'result' && correct) {
+    const acc = total > 0 ? (correctCount / total * 100).toFixed(0) : 0;
+    banner.textContent = `✅ 正确答案: ${correct}  ·  正确率 ${acc}% (${correctCount}/${total})`;
+    banner.className = 'correct';
+  } else if (phase === 'result' && d.message) {
+    banner.textContent = d.message;
+    banner.className = 'correct';
+  } else {
+    banner.className = '';
+  }
+
+  // Message
+  document.getElementById('message').textContent = d.message || '';
+}
+</script>
+</body>
+</html>
