@@ -40,3 +40,8 @@ LOG_LEVEL = _env_str("QUIZ_LOG_LEVEL", "INFO")
 # ── 数据文件 ──
 QUESTION_FILE = _env_str("QUIZ_QUESTION_FILE", "data/questions.json")
 RESULT_FILE = _env_str("QUIZ_RESULT_FILE", "data/results.json")
+
+# ── 评论源配置 ──
+COMMENT_SOURCE = _env_str("QUIZ_COMMENT_SOURCE", "simulator")  # "simulator" | "douyin"
+DOUYIN_ROOM_ID = _env_str("QUIZ_DOUYIN_ROOM_ID", "")           # 抖音直播间 ID
+DOUYIN_COOKIE = _env_str("QUIZ_DOUYIN_COOKIE", "")             # 抖音 Cookie（敏感）

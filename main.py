@@ -4,6 +4,10 @@
 启动: python main.py
 OBS 浏览器源: http://127.0.0.1:8765
 Admin 控制台: http://127.0.0.1:8765/admin
+
+切换评论源:
+  QUYZ_COMMENT_SOURCE=simulator python main.py   (默认)
+  QUYZ_COMMENT_SOURCE=douyin python main.py      (需配置 DOUYIN_ROOM_ID)
 """
 
 import asyncio
@@ -14,7 +18,8 @@ import sys
 import time
 
 import config
-from comment.simulator import SimulatorSource
+from comment.factory import CommentSourceFactory
+from comment.manager import ConnectionManager, CommentEvent
 from quiz.engine import QuizEngine, QuizState
 from stats.collector import StatsCollector
 from display.server import start_display, set_engine, broadcast, broadcast_force
@@ -29,7 +34,8 @@ logger = logging.getLogger("main")
 
 
 async def main():
-    logger.info("直播答题系统 启动")
+    logger.info(f"直播答题系统 启动 (评论源: {config.COMMENT_SOURCE})")
+    print(f"[系统] 评论源: {config.COMMENT_SOURCE}")
 
     # ── 1. 启动展示服务 ──
     try:
@@ -52,20 +58,39 @@ async def main():
     # 注入引擎到 Admin API
     set_engine(engine)
 
-    # ── 3. 初始化统计 ──
+    # ── 3. 创建评论源（工厂） ──
+    source_kwargs = _build_source_kwargs()
+    comment_source = CommentSourceFactory.create(config.COMMENT_SOURCE, **source_kwargs)
+
+    # ── 4. 连接管理器 ──
+    manager = ConnectionManager(comment_source)
+
+    # 连接状态回调
+    async def _on_connected():
+        logger.info(f"评论源已连接: {comment_source.platform}")
+
+    async def _on_disconnected(reason: str):
+        logger.warning(f"评论源断开: {reason}")
+
+    async def _on_error(exc: Exception):
+        logger.error(f"评论源错误: {exc}")
+
+    manager.on_connected = _on_connected
+    manager.on_disconnected = _on_disconnected
+    manager.on_error = _on_error
+
+    connected = await manager.start()
+    if not connected:
+        logger.error("无法连接评论源，退出")
+        await runner.cleanup()
+        return
+    print(f"[系统] 评论源已连接: {comment_source.platform}")
+
+    # ── 5. 初始化统计 ──
     stats = StatsCollector()
 
-    # ── 4. 启动模拟评论源 ──
-    comment_source = SimulatorSource(
-        correct_rate=config.CORRECT_RATE,
-        interval=config.COMMENT_INTERVAL,
-    )
-    await comment_source.start()
-    logger.info(f"模拟评论源已启动 (间隔 {config.COMMENT_INTERVAL}s)")
-
-    # ── 5. 注册引擎状态回调 ──
+    # ── 6. 注册引擎状态回调 ──
     async def on_quiz_state(state: QuizState):
-        """当答题引擎状态变化时触发（phase 切换 → 强制广播）"""
         if state.phase == "answering" and state.question:
             stats.new_question(
                 question_id=state.question.id,
@@ -73,17 +98,13 @@ async def main():
                 options=state.question.options,
                 correct=state.question.answer,
             )
-
         elif state.phase == "result":
             stats.set_phase("result")
-
         elif state.phase == "between":
             stats.set_phase("between")
-
         elif state.phase in ("idle", "countdown", "finished"):
             stats.set_phase(state.phase)
 
-        # 强制广播（phase 变化不受节流限制）
         payload = stats.to_dict()
         payload["phase"] = state.phase
         payload["time_left"] = state.time_left
@@ -92,29 +113,28 @@ async def main():
 
     engine.on_state_change(on_quiz_state)
 
-    # ── 6. 主循环：评论处理 + 答题调度 ──
+    # ── 7. 主循环：评论处理 + 答题调度 ──
     async def comment_loop():
-        """持续读取评论 → 去重投票 → 节流广播"""
+        """持续读取 CommentEvent → 去重投票 → 节流广播"""
         while True:
-            comment = await comment_source.get_comment()
-            if comment is None:
+            event: CommentEvent = await manager.get_comment()
+            if event is None:
                 await asyncio.sleep(0.05)
                 continue
 
-            if not (comment.answer and stats.current and stats.current.phase == "answering"):
+            if not (event.answer and stats.current and stats.current.phase == "answering"):
                 continue
 
-            # 去重投票（以用户名作为 user_id）
-            user_id = comment.user
-            is_new = stats.record_vote(user_id, comment.answer)
+            # 去重投票（user_id 去重）
+            is_new = stats.record_vote(event.user_id, event.answer)
             if not is_new:
-                continue  # 重复投票，跳过
+                continue
 
             # 判题
-            if engine.check_answer(comment.answer):
-                stats.mark_correct(user_id, comment.answer)
+            if engine.check_answer(event.answer):
+                stats.mark_correct(event.user_id, event.answer)
 
-            # 节流广播（投票期间的实时更新）
+            # 节流广播
             payload = stats.to_dict()
             payload["phase"] = "answering"
             await broadcast(payload)
@@ -123,7 +143,7 @@ async def main():
     comment_task = asyncio.create_task(comment_loop())
     quiz_task = asyncio.create_task(engine.run())
 
-    # ── 优雅关闭 ──
+    # ── 8. 优雅关闭 ──
     loop = asyncio.get_running_loop()
     shutdown_event = asyncio.Event()
 
@@ -152,12 +172,27 @@ async def main():
         except asyncio.CancelledError:
             pass
 
-    # ── 7. 保存结果 + 清理 ──
+    # ── 9. 保存结果 + 清理 ──
     _save_results(stats, engine)
-    await comment_source.stop()
+    await manager.stop()
     await runner.cleanup()
     logger.info("答题结束，系统关闭")
     print("[系统] 答题结束，系统关闭")
+
+
+def _build_source_kwargs() -> dict:
+    """根据 COMMENT_SOURCE 构建工厂参数"""
+    if config.COMMENT_SOURCE == "simulator":
+        return {
+            "correct_rate": config.CORRECT_RATE,
+            "interval": config.COMMENT_INTERVAL,
+        }
+    elif config.COMMENT_SOURCE == "douyin":
+        return {
+            "room_id": config.DOUYIN_ROOM_ID,
+            "cookie": config.DOUYIN_COOKIE,
+        }
+    return {}
 
 
 def _save_results(stats: StatsCollector, engine: QuizEngine):

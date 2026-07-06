@@ -2,9 +2,11 @@
 
 import asyncio
 import random
+import time
+import uuid
 from typing import Optional
 
-from .base import Comment, CommentSource
+from .base import CommentEvent, CommentSource
 
 
 # 模拟用户名池
@@ -25,41 +27,76 @@ _NOISE = [
 class SimulatorSource(CommentSource):
     """模拟评论源：随机生成带答案和无答案评论"""
 
-    def __init__(self, correct_rate: float = 0.65, interval: float = 0.3):
-        self.correct_rate = correct_rate
-        self.interval = interval
-        self._running = False
-        self._task: Optional[asyncio.Task] = None
-        self._queue: asyncio.Queue[Comment] = asyncio.Queue()
+    PLATFORM = "simulator"
 
-    async def start(self):
+    def __init__(self, correct_rate: float = 0.65, interval: float = 0.3):
+        self._correct_rate = correct_rate
+        self._interval = interval
+        self._running = False
+        self._connected = False
+        self._task: Optional[asyncio.Task] = None
+        self._queue: asyncio.Queue[CommentEvent] = asyncio.Queue()
+
+    # ── 生命周期 ──
+
+    async def connect(self) -> bool:
         self._running = True
         self._task = asyncio.create_task(self._generate())
+        self._connected = True
+        return True
 
-    async def stop(self):
+    async def disconnect(self):
         self._running = False
+        self._connected = False
         if self._task:
             self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
 
-    async def get_comment(self) -> Optional[Comment]:
+    async def health_check(self) -> bool:
+        return self._connected and self._task is not None and not self._task.done()
+
+    # ── 数据获取 ──
+
+    async def get_comment(self) -> Optional[CommentEvent]:
         try:
             return self._queue.get_nowait()
         except asyncio.QueueEmpty:
             return None
+
+    # ── 元信息 ──
+
+    @property
+    def platform(self) -> str:
+        return self.PLATFORM
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
+
+    # ── 内部生成 ──
 
     async def _generate(self):
         """后台生成模拟评论"""
         while self._running:
             name = random.choice(_NAMES)
 
-            # 按 correct_rate 概率发送带答案的评论，其余发噪声
-            if random.random() < self.correct_rate:
+            if random.random() < self._correct_rate:
                 answer = random.choice(["A", "B", "C", "1", "2", "3"])
-                text = answer
+                content = answer
             else:
                 answer = None
-                text = random.choice(_NOISE)
+                content = random.choice(_NOISE)
 
-            comment = Comment(user=name, text=text, answer=answer)
-            await self._queue.put(comment)
-            await asyncio.sleep(self.interval * random.uniform(0.5, 1.5))
+            event = CommentEvent(
+                user_id=str(uuid.uuid4())[:8],
+                nickname=name,
+                content=content,
+                answer=answer,
+                platform=self.PLATFORM,
+                timestamp=time.time(),
+            )
+            await self._queue.put(event)
+            await asyncio.sleep(self._interval * random.uniform(0.5, 1.5))

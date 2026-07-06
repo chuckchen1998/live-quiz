@@ -44,10 +44,7 @@ class StatsCollector:
 
     def new_question(self, question_id: int, question_text: str,
                      options: list[str], correct: str):
-        """开始新题，重置统计
-
-        options 支持 "A. xxx" 或 "1" 两种格式，统一归一化为 A/B/C
-        """
+        """开始新题，重置统计"""
         if self.current:
             self.history.append(self.current)
 
@@ -70,17 +67,15 @@ class StatsCollector:
         # 去重检查
         qid = self.current.question_id
         if user_id in self._voters and qid in self._voters[user_id]:
-            return False  # 已投过
+            return False
 
         key = _normalize_key(user_answer)
         if not key or key not in self.current.votes:
             return False
 
-        # 记录投票
         self.current.votes[key] += 1
         self.current.total_votes += 1
 
-        # 标记已投
         if user_id not in self._voters:
             self._voters[user_id] = {}
         self._voters[user_id][qid] = True
@@ -88,7 +83,7 @@ class StatsCollector:
         return True
 
     def mark_correct(self, user_id: str, user_answer: str):
-        """标记一条正确答案（仅当该用户之前投过票时生效）"""
+        """标记一条正确答案"""
         if not self.current:
             return
         key = _normalize_key(user_answer)
