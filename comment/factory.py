@@ -2,6 +2,7 @@
 
 from .base import CommentSource
 from .douyin import DouyinCommentSource
+from .replay import ReplayCommentSource
 from .simulator import SimulatorSource
 
 
@@ -11,11 +12,13 @@ class CommentSourceFactory:
     用法:
         source = CommentSourceFactory.create("simulator", interval=0.3)
         source = CommentSourceFactory.create("douyin", room_id="xxx", cookie="xxx")
+        source = CommentSourceFactory.create("replay", file_path="data/replay_comments.json", speed=5.0)
     """
 
     _registry: dict[str, type] = {
         "simulator": SimulatorSource,
         "douyin": DouyinCommentSource,
+        "replay": ReplayCommentSource,
     }
 
     @classmethod
