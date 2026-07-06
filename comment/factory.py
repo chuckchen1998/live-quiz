@@ -1,6 +1,7 @@
 """评论源工厂 — 根据配置创建对应实现"""
 
 from .base import CommentSource
+from .douyin import DouyinCommentSource
 from .simulator import SimulatorSource
 
 
@@ -9,11 +10,12 @@ class CommentSourceFactory:
 
     用法:
         source = CommentSourceFactory.create("simulator", interval=0.3)
-        source = CommentSourceFactory.create("douyin", room_id="xxx")
+        source = CommentSourceFactory.create("douyin", room_id="xxx", cookie="xxx")
     """
 
     _registry: dict[str, type] = {
         "simulator": SimulatorSource,
+        "douyin": DouyinCommentSource,
     }
 
     @classmethod
