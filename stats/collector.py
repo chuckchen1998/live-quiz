@@ -28,7 +28,6 @@ class StatsCollector:
         """开始新题，重置统计"""
         if self.current:
             self.history.append(self.current)
-        opts = [o.strip() for o in options]
         # 解析选项字母: "A. xxx" → "A"
         option_keys = []
         for o in options:
