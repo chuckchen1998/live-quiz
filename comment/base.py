@@ -4,81 +4,49 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional
 
+_ANSWER_CHARS = set("ABCD123")
+_ANSWER_PREFIXES = ["选", "看", "答", "投", "压", "肯定是", "绝对是", "应该是",
+                    "答案是", "答案", "我选", "我投", "我压", "我猜", "我觉",
+                    "果断", "直接", "必须", "当然", "肯定"]
+
+def _extract_answer(content: str) -> Optional[str]:
+    if not content: return None
+    s = content.strip()
+    if len(s) == 1 and s.upper() in _ANSWER_CHARS: return s.upper()
+    if len(s) == 2 and s[-1] == "." and s[0].upper() in _ANSWER_CHARS: return s[0].upper()
+    cleaned = s.replace(" ", "")
+    if len(cleaned) == 1 and cleaned.upper() in _ANSWER_CHARS: return cleaned.upper()
+    for prefix in _ANSWER_PREFIXES:
+        if s.startswith(prefix):
+            after = s[len(prefix):].strip().upper()
+            if after and after[0] in _ANSWER_CHARS: return after[0]
+    return None
 
 @dataclass
 class CommentEvent:
-    """所有评论源输出的统一事件 — 业务层唯一消费的数据结构
-
-    无论评论来自模拟器、抖音、快手还是任何平台，
-    都先转换为 CommentEvent，再送入 quiz/stats/display。
-    """
-
-    # ── 用户标识 ──
-    user_id: str                # 平台唯一 ID（模拟 UUID / 抖音 open_id）
-    nickname: str               # 显示昵称
-
-    # ── 评论内容 ──
-    content: str                # 原始评论文本
-    answer: Optional[str] = None  # 解析后的答案 A/B/C/1/2/3，无则为 None
-
-    # ── 元信息 ──
-    platform: str = "unknown"   # "simulator" | "douyin" | "kuaishou" | ...
-    timestamp: float = 0.0      # Unix 时间戳（秒）
-    raw: Optional[dict] = None  # 原始平台数据（调试/扩展用，业务层忽略）
-
+    user_id: str
+    nickname: str
+    content: str
+    answer: Optional[str] = None
+    platform: str = "unknown"
+    timestamp: float = 0.0
+    raw: Optional[dict] = None
+    def __post_init__(self):
+        if self.answer is None and self.content: self.answer = _extract_answer(self.content)
 
 class CommentSource(ABC):
-    """评论源抽象接口 — 所有平台实现此接口
-
-    生命周期:
-      1. connect()      — 建立连接
-      2. get_comment()  — 循环获取（非阻塞）
-      3. disconnect()   — 断开连接
-
-    业务层（quiz/stats/display）不依赖任何具体实现，
-    只消费 CommentSource 接口。
-    """
-
-    # ── 生命周期 ──
-
     @abstractmethod
-    async def connect(self) -> bool:
-        """建立连接。返回 True=成功，False=失败"""
-        ...
-
+    async def connect(self) -> bool: ...
     @abstractmethod
-    async def disconnect(self):
-        """断开连接，释放所有资源"""
-        ...
-
+    async def disconnect(self): ...
     @abstractmethod
-    async def health_check(self) -> bool:
-        """健康检查。返回 True=连接正常"""
-        ...
-
-    # ── 数据获取 ──
-
+    async def health_check(self) -> bool: ...
     @abstractmethod
-    async def get_comment(self) -> Optional[CommentEvent]:
-        """获取一条评论。无数据返回 None（非阻塞，立即返回）"""
-        ...
-
-    # ── 元信息 ──
-
+    async def get_comment(self) -> Optional[CommentEvent]: ...
     @property
     @abstractmethod
-    def platform(self) -> str:
-        """平台标识: "simulator" | "douyin" | "kuaishou" """
-        ...
-
+    def platform(self) -> str: ...
     @property
     @abstractmethod
-    def is_connected(self) -> bool:
-        """当前连接状态"""
-        ...
-
-    # ── 统计（可选覆写） ──
-
-    async def get_stats(self) -> dict:
-        """连接统计: {messages_received, errors, uptime, ...}"""
-        return {}
+    def is_connected(self) -> bool: ...
+    async def get_stats(self) -> dict: return {}

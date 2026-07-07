@@ -398,22 +398,54 @@ class DouyinCommentSource(CommentSource):
         return True
 
     async def _poll_loop(self):
-        """HTTP 轮询循环"""
+        """HTTP 轮询循环 — 通过抖音 HTTP API 获取评论区消息"""
         logger.info("HTTP 轮询循环启动 (降级模式)")
+
+        poll_urls = [
+            (f"{_DOUYIN_LIVE_API}/webcast/im/fetch/?"
+             f"room_id={self._room_id}&cursor=0&count=20&"
+             f"live_id=1&app_id=1128"),
+        ]
+
+        session = None
+        consecutive_errors = 0
 
         while self._connected:
             try:
-                # TODO: 实际 HTTP 端点
-                # url = f"{_DOUYIN_LIVE_API}/webcast/im/fetch/?room_id={self._room_id}"
-                # async with self._session.get(url) as resp:
-                #     data = await resp.json()
-                #     for msg in data.get("messages", []):
-                #         event = self._parse_raw(msg)
-                #         if event:
-                #             await self._enqueue(event)
-                pass
+                import aiohttp
+                if session is None or session.closed:
+                    headers = dict(_HEADERS_TEMPLATE)
+                    headers["Cookie"] = self._cookie
+                    session = aiohttp.ClientSession(
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    )
 
-                await asyncio.sleep(2)  # 轮询间隔
+                got_any = False
+                for url in poll_urls:
+                    try:
+                        async with session.get(url) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                messages = data.get("messages", []) or data.get("data", {}).get("messages", [])
+                                for msg in messages:
+                                    event = self._parse_raw(msg)
+                                    if event:
+                                        await self._enqueue(event)
+                                        got_any = True
+                                if got_any:
+                                    self._last_msg_time = time.time()
+                                    consecutive_errors = 0
+                                    break
+                    except (aiohttp.ClientError, asyncio.TimeoutError):
+                        continue
+
+                if not got_any:
+                    consecutive_errors += 1
+                    if consecutive_errors == 1:
+                        logger.warning("HTTP 轮询未收到消息，可能需要真实 Cookie 或 API 端点已变更")
+
+                await asyncio.sleep(2)
 
             except asyncio.CancelledError:
                 break
@@ -421,6 +453,11 @@ class DouyinCommentSource(CommentSource):
                 logger.exception("HTTP 轮询异常")
                 await asyncio.sleep(5)
 
+        if session and not session.closed:
+            try:
+                await session.close()
+            except Exception:
+                pass
         logger.info("HTTP 轮询循环退出")
 
     # ═══════════════════════════════════════════════
