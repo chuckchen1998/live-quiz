@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+data/ocr_*.png
+data/results.json
+data/replay_comments.json

@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  live-quiz:
+    build: .
+    container_name: live-quiz
+    ports:
+      - "8765:8765"
+    environment:
+      - QUIZ_COMMENT_SOURCE=${QUIZ_COMMENT_SOURCE:-simulator}
+      - QUIZ_DISPLAY_HOST=0.0.0.0
+      - QUIZ_DISPLAY_PORT=8765
+      - QUIZ_LOG_LEVEL=${QUIZ_LOG_LEVEL:-INFO}
+      # 抖音配置 (仅当 COMMENT_SOURCE=douyin 时需要)
+      - QUIZ_DOUYIN_ROOM_ID=${QUIZ_DOUYIN_ROOM_ID:-}
+      - QUIZ_DOUYIN_COOKIE=${QUIZ_DOUYIN_COOKIE:-}
+    volumes:
+      # 挂载题库和结果目录 (方便外部修改)
+      - ./data:/app/data
+    restart: unless-stopped

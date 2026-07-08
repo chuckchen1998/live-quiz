@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>直播答题</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:transparent}
+body{font-family:'PingFang SC','STSong','Microsoft YaHei',serif;
+  background:linear-gradient(180deg,#0a1628 0%,#142850 45%,#1a3a6e 100%);color:#fff}
+
+#app{width:100%;height:100%;display:flex;flex-direction:column;padding:20px 40px 18px;gap:0}
+
+/* ── 顶部：题库名 + 题号 + 倒计时 ── */
+#top-row{display:flex;align-items:center;gap:18px;height:70px}
+#category{font-size:26px;color:#c9a96e}
+#q-num{font-size:18px;color:rgba(201,169,110,0.5)}
+#timer{font-size:38px;font-weight:300;color:#c9a96e;
+  width:66px;height:66px;border:1.5px solid rgba(201,169,110,0.3);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:1130px}
+#timer.urgent{color:#e8a838;border-color:rgba(232,168,56,0.5);animation:glow 0.6s infinite}
+@keyframes glow{0%,100%{box-shadow:0 0 8px rgba(232,168,56,0.3)}50%{box-shadow:0 0 20px rgba(232,168,56,0.6)}}
+
+/* ── 分割线 ── */
+#divider{height:1px;margin:8px 0 14px;
+  background:linear-gradient(90deg,transparent,rgba(201,169,110,0.2),transparent)}
+
+/* ── 主区域：左（题目+选项+投票+解析）+ 右（留空） ── */
+#main{display:flex;flex:1;gap:30px;min-height:0}
+#left{display:flex;flex-direction:column;flex:1;gap:16px;min-width:0}
+#right{width:1080px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;
+  border-left:1px solid rgba(201,169,110,0.08);padding:8px 12px}
+
+/* ── 题目 ── */
+#question{font-size:32px;font-weight:500;line-height:1.5;word-break:break-word}
+
+/* ── 选项（竖向） ── */
+#options{display:flex;flex-direction:column;gap:10px}
+.opt{display:none;padding:14px 20px;font-size:22px;font-weight:400;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(201,169,110,0.18);
+  border-radius:6px;word-break:break-word}
+.opt.show{display:block}
+.opt.correct-answer{background:rgba(76,175,80,0.12);border-color:rgba(76,175,80,0.35)}
+
+/* ── 投票统计（答题中显示） ── */
+#votes-section{display:none;flex-direction:column;gap:8px}
+#votes-section.show{display:flex}
+#votes-header{font-size:13px;color:rgba(201,169,110,0.5);letter-spacing:2px;margin-bottom:2px}
+#votes-header span{color:#c9a96e;font-weight:600}
+#bars{display:flex;flex-direction:column;gap:6px}
+.bar{display:flex;align-items:center;gap:10px}
+.bar-label{font-size:16px;font-weight:600;color:#c9a96e;width:22px;text-align:center;flex-shrink:0}
+.bar-track{flex:1;height:20px;background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.1);
+  position:relative;overflow:hidden}
+.bar-fill{position:absolute;left:0;top:0;height:100%;min-width:3px;
+  background:linear-gradient(90deg,rgba(201,169,110,0.25),#c9a96e);transition:width 0.35s ease}
+.bar-count{font-size:14px;color:rgba(201,169,110,0.6);width:36px;text-align:right;flex-shrink:0}
+.bar.correct .bar-fill{background:linear-gradient(90deg,rgba(76,175,80,0.3),#4caf50)}
+.bar.correct .bar-label{color:#4caf50}
+#result-block{display:none;flex-direction:column;gap:10px}
+#result-block.show{display:flex}
+#answer-card{padding:14px 22px 14px 22px;font-size:26px;font-weight:600;color:#c9a96e;
+  border:1px solid rgba(201,169,110,0.25);letter-spacing:1px;text-align:left}
+#answer-card .acc{display:block;margin-top:8px;color:#c9a96e;font-size:26px;font-weight:600}
+#explanation-card{padding:12px 20px;font-size:20px;line-height:1.7;
+  color:rgba(255,255,255,0.6);font-family:'PingFang SC','Microsoft YaHei',sans-serif}
+
+/* ── 排行榜（右侧竖排） ── */
+#lb-side{display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1}
+#lb-title{font-size:11px;color:rgba(201,169,110,0.3);letter-spacing:2px}
+#lb-list{display:flex;flex-direction:column;gap:5px}
+.lb-item{display:flex;align-items:center;gap:5px;padding:3px 9px;
+  background:rgba(201,169,110,0.05);border:1px solid rgba(201,169,110,0.08);border-radius:4px;font-size:13px}
+.lb-rank{color:#c9a96e;font-weight:600;min-width:22px}
+.lb-name{color:rgba(255,255,255,0.4);max-width:80px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.lb-pts{color:#c9a96e;font-weight:600}
+
+/* ── idle ── */
+#idle-msg{display:none;flex:1;align-items:center;justify-content:center;font-size:26px;color:rgba(201,169,110,0.15)}
+#idle-msg.show{display:flex}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top-row">
+    <span id="category"></span>
+    <span id="q-num"></span>
+    <span id="timer">--</span>
+  </div>
+  <div id="divider"></div>
+  <div id="idle-msg"></div>
+  <div id="main">
+    <div id="left">
+      <div id="question"></div>
+      <div id="options"></div>
+      <div id="result-block">
+        <div id="answer-card"></div>
+        <div id="explanation-card"></div>
+      </div>
+      <div id="votes-section">
+        <div id="votes-header"></div>
+        <div id="bars"></div>
+      </div>
+    </div>
+    <div id="right">
+      <div id="lb-side">
+        <div id="lb-title">排 行 榜</div>
+        <div id="lb-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+function connect(){
+  var ws=new WebSocket('ws://'+location.host+'/ws');
+  ws.onmessage=function(e){update(JSON.parse(e.data))};
+  ws.onclose=function(){setTimeout(connect,2000)};
+  ws.onerror=function(){ws.close()};
+}
+connect();
+
+function escapeHtml(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+function update(d){
+  var ph=d.phase||'idle',opts=d.options||[],votes=d.votes||{},total=d.total||0;
+  var corr=d.correct_answer||'',exp=d.explanation||'',cat=d.category||'';
+  var hasQ=!!(d.question_text);
+
+  // idle / finished 提示
+  var idle=document.getElementById('idle-msg');
+  if(ph==='idle'||ph==='finished'){
+    idle.classList.add('show');idle.textContent=ph==='finished'?'答 题 结 束':'等 待 答 题 开 始';
+  }else{idle.classList.remove('show')}
+
+  // 顶部：题库名 + 题号
+  document.getElementById('category').textContent=cat?cat+'\u9898\u5e93':'';
+  document.getElementById('q-num').textContent=hasQ&&d.current_index
+    ?'\u7b2c '+d.current_index+' \u9898':'';
+
+  // 题目内容
+  document.getElementById('question').textContent=hasQ?d.question_text:'';
+
+  // 选项（竖向）— 答题中显示，result时高亮正确答案
+  var optBox=document.getElementById('options');
+  if(ph==='answering'&&opts.length){
+    var h='';
+    for(var i=0;i<opts.length;i++){
+      h+='<div class="opt show">'+escapeHtml(opts[i])+'</div>';
+    }
+    optBox.innerHTML=h;
+  }else if(ph==='result'&&opts.length&&corr){
+    var h='';
+    for(var i=0;i<opts.length;i++){
+      var L=String.fromCharCode(65+i);
+      var cls=L===corr?'opt show correct-answer':'opt show';
+      h+='<div class="'+cls+'">'+escapeHtml(opts[i])+'</div>';
+    }
+    optBox.innerHTML=h;
+  }else{optBox.innerHTML=''}
+
+  // 投票 vs 答案解析
+  var vs=document.getElementById('votes-section');
+  var rb=document.getElementById('result-block');
+  if(ph==='result'){
+    // result 阶段：投票统计 + 答案解析 都显示
+    rb.classList.add('show');
+    if(corr){
+      var acc=total>0?((d.correct_count||0)/total*100).toFixed(0):0;
+      document.getElementById('answer-card').innerHTML='\u2726 \u6b63\u786e\u7b54\u6848\uff1a'+corr
+        +'<span class="acc">\u6b63\u786e\u7387 '+acc+'%\uff08'+(d.correct_count||0)+'/'+total+'\uff09</span>';
+    }else{
+      document.getElementById('answer-card').textContent=d.message||'';
+    }
+    document.getElementById('explanation-card').innerHTML=exp?'\u2726 \u89e3\u6790\uff1a'+exp:'';
+    // 同时显示投票柱状图
+    if(opts.length&&total>0){
+      vs.classList.add('show');
+      document.getElementById('votes-header').innerHTML='\u6295 \u7968 \u7edf \u8ba1\u3000<span>'+total+'</span>\u3000\u4eba';
+      var maxV=1;for(var k in votes)if(votes[k]>maxV)maxV=votes[k];
+      var h='';
+      for(var i=0;i<opts.length;i++){
+        var L=String.fromCharCode(65+i),c=votes[L]||0;
+        var pct=maxV>0?Math.max(c/maxV*100,4):4;
+        var clsBar=L===corr?'bar correct':'bar';
+        h+='<div class="'+clsBar+'">'
+          +'<span class="bar-label">'+L+'</span>'
+          +'<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'
+          +'<span class="bar-count">'+c+'</span>'
+          +'</div>';
+      }
+      document.getElementById('bars').innerHTML=h;
+    }else if(opts.length){
+      // mock 投票数据
+      vs.classList.add('show');
+      var mockV={A:35,B:28,C:18,D:12};var mockT=93;
+      document.getElementById('votes-header').innerHTML='\u6295 \u7968 \u7edf \u8ba1\u3000<span>'+mockT+'</span>\u3000\u4eba';
+      var h='';var maxV=35;
+      for(var i=0;i<opts.length;i++){
+        var L=String.fromCharCode(65+i),c=mockV[L]||0;
+        var pct=maxV>0?Math.max(c/maxV*100,4):4;
+        var clsBar=L===corr?'bar correct':'bar';
+        h+='<div class="'+clsBar+'">'
+          +'<span class="bar-label">'+L+'</span>'
+          +'<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'
+          +'<span class="bar-count">'+c+'</span>'
+          +'</div>';
+      }
+      document.getElementById('bars').innerHTML=h;
+    }else{vs.classList.remove('show')}
+  }else{
+    rb.classList.remove('show');
+    if(ph==='answering'&&opts.length&&total>0){
+      vs.classList.add('show');
+      document.getElementById('votes-header').innerHTML='\u6295 \u7968 \u7edf \u8ba1\u3000<span>'+total+'</span>\u3000\u4eba';
+      var maxV=1;for(var k in votes)if(votes[k]>maxV)maxV=votes[k];
+      var h='';
+      for(var i=0;i<opts.length;i++){
+        var L=String.fromCharCode(65+i),c=votes[L]||0;
+        var pct=maxV>0?Math.max(c/maxV*100,4):4;
+        h+='<div class="bar">'
+          +'<span class="bar-label">'+L+'</span>'
+          +'<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'
+          +'<span class="bar-count">'+c+'</span>'
+          +'</div>';
+      }
+      document.getElementById('bars').innerHTML=h;
+    }else if(ph==='answering'&&opts.length){
+      // mock 投票数据 — 测试用
+      vs.classList.add('show');
+      var mockV={A:35,B:28,C:18,D:12};var mockT=93;
+      document.getElementById('votes-header').innerHTML='\u6295 \u7968 \u7edf \u8ba1\u3000<span>'+mockT+'</span>\u3000\u4eba';
+      var h='';var maxV=35;
+      for(var i=0;i<opts.length;i++){
+        var L=String.fromCharCode(65+i),c=mockV[L]||0;
+        var pct=maxV>0?Math.max(c/maxV*100,4):4;
+        h+='<div class="bar">'
+          +'<span class="bar-label">'+L+'</span>'
+          +'<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'
+          +'<span class="bar-count">'+c+'</span>'
+          +'</div>';
+      }
+      document.getElementById('bars').innerHTML=h;
+    }else{vs.classList.remove('show')}
+  }
+
+  // 排行榜（右侧始终显示）
+  fetch('/api/leaderboard').then(function(r){return r.json()}).then(function(j){
+    var list=j.leaderboard||[];
+    if(!list.length){
+      // mock 数据 — 测试用
+      list=[{rank:1,nickname:'小明',points:12},{rank:2,nickname:'小红',points:10},{rank:3,nickname:'大壮',points:8},{rank:4,nickname:'丽丽',points:6}];
+    }
+    var h='';
+    for(var i=0;i<Math.min(list.length,8);i++){
+      var u=list[i];
+      h+='<div class="lb-item">'
+        +'<span class="lb-rank">#'+u.rank+'</span>'
+        +'<span class="lb-name">'+escapeHtml(u.nickname||'?')+'</span>'
+        +'<span class="lb-pts">'+(u.points||0)+'\u5206</span>'
+        +'</div>';
+    }
+    document.getElementById('lb-list').innerHTML=h||'';
+  });
+
+  // 圆形倒计时（between 阶段隐藏）
+  var timer=document.getElementById('timer');
+  if(ph==='between'){
+    timer.textContent='';timer.className='';
+  }else if(d.time_left!==undefined&&d.time_left>0){
+    timer.textContent=d.time_left;
+    timer.className=(ph==='answering'&&d.time_left<=5)?'urgent':'';
+  }else{timer.textContent='';timer.className=''}
+}
+})();
+</script>
+</body>
+</html>
